@@ -4,6 +4,7 @@
 
 import rarfile
 import zipfile
+import fastzipfile
 import os
 import sys
 import re
@@ -12,69 +13,82 @@ from multiprocessing.dummy import Pool
 
 
 def un_rar(file_name, pwd=None):
+    """解压文件到当前路径"""
+    target = file_name.split('.')[0]
     try:
         # if file_name.split('.')[-1] == 'rar':
         if rarfile.is_rarfile(file_name):
-            rar = rarfile.RarFile(file_name)
+            files = rarfile.RarFile(file_name)
+        else:
+            files = zipfile.ZipFile(file_name)
+        file_list = files.namelist()
+        po = Pool()
+        for file in file_list:
             try:
-                rar.extractall(path=file_name.split('.')[0], pwd=None)
+                # rar.extractall(path=target, pwd=None)
+                po.apply_async(files.extract(file, target, None))
             except Exception:
-                rar.extractall(path=file_name.split('.')[0], pwd=pwd)
-        # elif file_name.split('.')[-1] == 'zip':
-        elif zipfile.is_zipfile(file_name):
-            zip = zipfile.ZipFile(file_name)
-            # for zip_file in zip.namelist():
-            #     try:
-            #         print(zip.filelist)
-            #         zip_file = zip_file.encode('cp437').decode('utf-8')
-            #         print(zip_file)
-            #         print(zip.namelist())
-            #
-            #     except Exception as e:
-            #         print(e)
-            #         print('7')
-            #         try:
-            #             zip_file = zip_file.encode('utf-8').decode('utf-8')
-            #         except Exception as i:
-            #             print(i)
-            try:
-                zip.extractall(path=file_name.split('.')[0], pwd=None)
-            except Exception:
-                zip.extractall(path=file_name.split('.')[0], pwd=pwd)
+                # rar.extractall(path=target, pwd=pwd)
+                po.apply_async(files.extract(file, target, pwd))
+        # for zip_file in zip.namelist():
+        #     try:
+        #         print(zip.filelist)
+        #         zip_file = zip_file.encode('cp437').decode('utf-8')
+        #         print(zip_file)
+        #         print(zip.namelist())
+        #
+        #     except Exception as e:
+        #         print(e)
+        #         print('7')
+        #         try:
+        #             zip_file = zip_file.encode('utf-8').decode('utf-8')
+        #         except Exception as i:
+        #             print(i)
     except Exception as e:
         print(e)
-        print('Fail：' + file_name)
+        print(f'Fail:{file_name}')
     else:
-        print('Success')
+        print(f'Success:{file_name}')
+        po.close()
 
 
 def point_file_name(path):
+    """获取压缩文件路径"""
     return [os.path.join(item[0], file_name)
             for item in os.walk(path)
             for file_name in item[-1]
             if re.search(r'.rar$|.zip$', file_name)]
 
 
-if __name__ == '__main__':
-    path = sys.argv[1]
-    pwd = ''
+def get_pwd():
+    """从终端输入获取密码"""
+    pwd = ""
     if len(sys.argv) > 2:
         if sys.argv[2] != "rm":
             pwd = sys.argv[2].encode('gbk')
         elif sys.argv[2] == "rm":
             if len(sys.argv) == 4:
                 pwd = sys.argv[3].encode('gbk')
+    return pwd
+
+
+def rm_file(files):
+    """删除源文件"""
+    if len(sys.argv) > 2:
+        if sys.argv[2] == "rm":
+            for file in files:
+                os.remove(file)
+
+
+if __name__ == '__main__':
+    path = sys.argv[1]
+    pwd = get_pwd()
     # with open(r'UnRAR.exe','rb') as f:
     #     with open(os.path.join(path,'UnRAR.exe'),'wb') as other:
     #         other.write(f.read())
     file_names = point_file_name(path)
     pool = Pool()
-    pool.starmap(un_rar, zip(file_names, [pwd] * len(file_names)))
-    # for file_name in file_names:
-    #    pool.apply_async(un_rar, args=(file_name, pwd))
+    pool.starmap_async(un_rar, zip(file_names, [pwd] * len(file_names)))
     pool.close()
     pool.join()
-    if len(sys.argv) > 2:
-        if sys.argv[2] == "rm":
-            for file_name in file_names:
-                os.remove(file_name)
+    rm_file(file_names)
