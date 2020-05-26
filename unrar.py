@@ -87,8 +87,11 @@ if __name__ == '__main__':
     #     with open(os.path.join(path,'UnRAR.exe'),'wb') as other:
     #         other.write(f.read())
     file_names = point_file_name(path)
-    pool = Pool()
-    pool.starmap_async(un_rar, zip(file_names, [pwd] * len(file_names)))
-    pool.close()
-    pool.join()
-    rm_file(file_names)
+    while file_names:
+        pool = Pool()
+        pool.starmap_async(un_rar, zip(file_names, [pwd] * len(file_names)))
+        pool.close()
+        pool.join()
+        rm_file(file_names)
+        for name in file_names:
+            file_names = point_file_name(name.split(".")[0])
